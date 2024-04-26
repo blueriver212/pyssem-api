@@ -10,6 +10,10 @@ app = Flask(__name__)
 load_dotenv()
 
 uri = os.getenv("MONGO_URI")
+if not uri:
+    raise ValueError("No MONGO_URI set for MongoDB connection")
+
+print(uri)
 mongo = MongoClient(uri, server_api=ServerApi('1'), tlsAllowInvalidCertificates=True)
 
 try:
