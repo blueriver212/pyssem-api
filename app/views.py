@@ -17,7 +17,7 @@ class SimulationSchema(ma.Schema):
     created = fields.DateTime(required=True)
     modified = fields.DateTime(required=True)
     scenario_properties = fields.Dict(keys=fields.String(), required=True)
-    species = fields.Dict(keys=fields.String(), required=True)#
+    species = fields.Dict(keys=fields.String(), required=True)
     status = fields.String(required=True, validate=validate.OneOf(["running", "completed", "failed", "pending"]))
 
 simulation_schema = SimulationSchema()
@@ -68,6 +68,10 @@ def get_simulations_by_owner(owner):
 @app.route('/simulation/name/<string:name>', methods=['GET'])
 def get_simulations_by_name(name):
     return search_simulations({"simulation_name": name})
+
+@app.route('/simulation/status/<string:status>', methods=['GET'])
+def get_simulations_by_status(status):
+    return search_simulations({"status": status})
 
 if __name__ == '__main__':
     app.run(debug=True)
