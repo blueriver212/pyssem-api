@@ -1,11 +1,15 @@
 from flask import Flask
 from flask_pymongo import MongoClient
-from pymongo import ServerApi
+from pymongo.server_api import ServerApi
 import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 
-uri="mongodb+srv://indybrownhall:lJbhGH407gKDTJgU@simulation.ckprzup.mongodb.net/?retryWrites=true&w=majority"
+
+load_dotenv()
+
+uri = os.getenv("MONGO_URI")
 mongo = MongoClient(uri, server_api=ServerApi('1'), tlsAllowInvalidCertificates=True)
 
 try:
