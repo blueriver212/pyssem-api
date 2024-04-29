@@ -2,12 +2,20 @@ from flask import Flask
 from flask_pymongo import MongoClient
 from pymongo.server_api import ServerApi
 import os
+from app.celery_utils import celery_init_app
 from dotenv import load_dotenv
+load_dotenv()
 
 app = Flask(__name__)
 
-
-load_dotenv()
+app.config.from_mapping(
+    CELERY=dict(
+        broker_url="redis://localhost:6379/0",
+        result_backend="redis://localhost:6379/0",
+        task_ignore_result=True,
+    ),
+)
+celery_app = celery_init_app(app)
 
 uri = os.getenv("MONGO_URI")
 if not uri:

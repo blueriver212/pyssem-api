@@ -6,7 +6,7 @@
   "created": "2024-01-01T12:00:00Z",
   "modified": "2024-01-01T12:00:00Z",
   "scenario_properties": {
-    "start_date": "2022-03-01T00:00:00Z",   
+    "start_date": "01/03/2022",   
     "simulation_duration": 100,              
     "steps": 200,                            
     "min_altitude": 200,                   
