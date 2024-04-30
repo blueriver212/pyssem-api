@@ -1,11 +1,10 @@
-flask
+Flask
+Celery
 redis
-flask_pymongo
-flask_pymongo
-celery
-marshmallow
+pymongo
 python-dotenv
 flask_marshmallow
+marshmallow
 pandas
 numpy
 scipy

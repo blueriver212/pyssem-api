@@ -1,13 +1,24 @@
+version: '3'
+
 services:
-  redis: 
-    image: "redis:alpine"
-    ports:
-      - '6379:6379' 
-  web:
+  flask:
     build: .
     ports:
-        - "5000:5000"
+      - "5000:5000"
     volumes:
-        - .:/code
+      - .:/app
     depends_on:
-        - redis
+      - redis
+    environment:
+      - FLASK_ENV=development
+
+  redis:
+    image: "redis:alpine"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+    command: ["celery", "-A", "app.celery", "worker", "--loglevel=info"]
