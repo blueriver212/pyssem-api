@@ -1,0 +1,14 @@
+flask
+redis
+flask_pymongo
+flask_pymongo
+celery
+marshmallow
+python-dotenv
+flask_marshmallow
+pandas
+numpy
+scipy
+setuptools==68.0.0
+tqdm
+sympy

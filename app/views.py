@@ -6,7 +6,7 @@ from marshmallow import fields, ValidationError, validate
 from bson.json_util import dumps
 from bson.objectid import ObjectId
 import json
-from pyssem import pySSEM_model
+import pyssem
 from app import celery_app
 import traceback
 
@@ -69,7 +69,7 @@ def run_simulation(simulation_data):
         scenario_props = simulation_data['scenario_properties']
         species = simulation_data['species']
         
-        model = pySSEM_model(**scenario_props)
+        model = pyssem.pySSEM_model(**scenario_props)
         model.configure_species(species)
         
         # Run full model
