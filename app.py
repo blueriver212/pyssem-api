@@ -37,8 +37,6 @@ celery_logger.setLevel(logging.INFO)
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.config['CELERY_BROKER_URL'])
 
-
-
 # MongoDB configuration
 uri = os.getenv("MONGO_URI")
 if not uri:
@@ -97,20 +95,14 @@ def simulate_task(self, scenario_props, species, id):
 
     # Update the simulation status in the database
     mongo.db.simulations.update_one(
-        {"id": scenario_props["id"]},
+        {"id": id},
         {"$set": {"status": "completed"}}
     )
     return results
 
 @app.route('/')
 def hello():
-    return 'Hello, Tester!'
-
-# @app.route('/simulate', methods=['POST'])
-# def simulate():
-#     data = request.get_json()
-#     task = simulate_task.delay(data)
-#     return jsonify({'result_id': task.id})
+    return 'Hello, welcome to the Pyssem API!'
 
 @app.route('/task_status', methods=['GET'])
 def task_status():
@@ -154,10 +146,10 @@ def create_simulation():
         app.logger.error(f'Invalid data: {errors}')
         return jsonify({"error": "Invalid data", "messages": errors}), 400
 
-    # existing_simulation = mongo.db.simulations.find_one({"id": data.get("id")})
-    # if existing_simulation:
-    #     app.logger.error('Simulation with this ID already exists')
-    #     return jsonify({"error": "A simulation with this ID already exists"}), 409
+    existing_simulation = mongo.db.simulations.find_one({"id": data.get("id")})
+    if existing_simulation:
+        app.logger.error('Simulation with this ID already exists')
+        return jsonify({"error": "A simulation with this ID already exists"}), 409
     
     # Add to the database
     try:
@@ -169,7 +161,7 @@ def create_simulation():
         scenario_props = data["scenario_properties"]
         species = data["species"]
 
-        task = simulate_task.delay(scenario_props=scenario_props, species=species, id=data["id"])
+        task = simulate_task.delay(scenario_props=scenario_props, species=species, id=data.get("id"))
 
         # Return log that simulation has started successfully
         return jsonify({'result_id': task.id}), 201
@@ -190,6 +182,13 @@ def search_simulations(query):
 @app.route('/simulation/id/<string:simulation_id>', methods=['GET'])
 def get_simulation_by_id(simulation_id):
     return search_simulations({"id": simulation_id})
+
+
+# Delete all simulations
+@app.route('/simulation', methods=['DELETE'])
+def delete_all_simulations():
+    result = mongo.db.simulations.delete_many({})
+    return jsonify({"deleted_count": result.deleted_count}), 200
 
 
 if __name__ == '__main__':
