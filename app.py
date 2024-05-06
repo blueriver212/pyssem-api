@@ -3,7 +3,7 @@ import time
 import os
 
 # pyssem
-from pyssem import ScenarioProperties
+from pyssem.model import Model
 
 # Flask
 from flask import Flask, jsonify
@@ -72,44 +72,47 @@ simulation_schema = SimulationSchema()
 
 ## ROUTES
 @celery.task(bind=True)
-def simulate_task(self, scenario_props, species):
+def simulate_task(self, scenario_props, species, id):
     celery_logger.info('Starting simulate_task')
 
-
+    print(scenario_props)
     # Create an instance of the pySSEM_model with the simulation parameters
-    model = ScenarioProperties(
-        start_date=scenario_props["start_date"].split("T")[0],  # Assuming the date is in ISO format
-        simulation_duration=scenario_props["simulation_duration"],
-        steps=scenario_props["steps"],
-        min_altitude=scenario_props["min_altitude"],
-        max_altitude=scenario_props["max_altitude"],
-        n_shells=scenario_props["n_shells"],
-        launch_function=scenario_props["launch_function"],
-        integrator=scenario_props["integrator"],
-        density_model=scenario_props["density_model"],
-        LC=scenario_props["LC"],
-        v_imp=scenario_props["v_imp"],
-        launchfile=r'C:\Users\IT\Documents\UCL\pyssem\pyssem\utils\launch\data\x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv'
-    )
+    model = Model(
+            start_date=scenario_props["start_date"].split("T")[0],  # Assuming the date is in ISO format
+            simulation_duration=scenario_props["simulation_duration"],
+            steps=scenario_props["steps"],
+            min_altitude=scenario_props["min_altitude"],
+            max_altitude=scenario_props["max_altitude"],
+            n_shells=scenario_props["n_shells"],
+            launch_function=scenario_props["launch_function"],
+            integrator=scenario_props["integrator"],
+            density_model=scenario_props["density_model"],
+            LC=scenario_props["LC"],
+            v_imp=scenario_props["v_imp"],
+            launchfile='x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv'
+        )
 
-    species = scenario_props["species"]
     model.configure_species(species)
     results = model.run_model()
-    results = {"result": "Simulation complete"}
 
+    # Update the simulation status in the database
+    mongo.db.simulations.update_one(
+        {"id": scenario_props["id"]},
+        {"$set": {"status": "completed"}}
+    )
     return results
 
 @app.route('/')
 def hello():
     return 'Hello, Tester!'
 
-@app.route('/simulate', methods=['POST'])
-def simulate():
-    data = request.get_json()
-    task = simulate_task.delay(data)
-    return jsonify({'result_id': task.id})
+# @app.route('/simulate', methods=['POST'])
+# def simulate():
+#     data = request.get_json()
+#     task = simulate_task.delay(data)
+#     return jsonify({'result_id': task.id})
 
-@app.route('/simulate', methods=['POST'])
+@app.route('/task_status', methods=['GET'])
 def task_status():
     data = request.get_json()
     task = simulate_task.AsyncResult(data['result_id'])
@@ -121,7 +124,7 @@ def task_status():
     elif task.state == 'SUCCESS':
         response = {
             'status': 'success',
-            'message': 'Simulation task has completed successfully.'
+            'message': 'Simulation task has comWpleted successfully.'
         }
     elif task.state == 'FAILURE':
         response = {
@@ -166,25 +169,10 @@ def create_simulation():
         scenario_props = data["scenario_properties"]
         species = data["species"]
 
-        task = simulate_task.delay(scenario_props=scenario_props, species=species)
-
-        model = pyssem.pySSEM_model(
-            start_date=scenario_props["start_date"].split("T")[0],  # Assuming the date is in ISO format
-            simulation_duration=scenario_props["simulation_duration"],
-            steps=scenario_props["steps"],
-            min_altitude=scenario_props["min_altitude"],
-            max_altitude=scenario_props["max_altitude"],
-            n_shells=scenario_props["n_shells"],
-            launch_function=scenario_props["launch_function"],
-            integrator=scenario_props["integrator"],
-            density_model=scenario_props["density_model"],
-            LC=scenario_props["LC"],
-            v_imp=scenario_props["v_imp"],
-            launchfile=r'C:\Users\IT\Documents\UCL\pyssem\pyssem\utils\launch\data\x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv'
-        )
+        task = simulate_task.delay(scenario_props=scenario_props, species=species, id=data["id"])
 
         # Return log that simulation has started successfully
-        return jsonify({'result_id': data['id']}), 201
+        return jsonify({'result_id': task.id}), 201
     
     except Exception as e:
         app.logger.error('Failed to create simulation')

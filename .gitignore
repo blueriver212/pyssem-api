@@ -1,0 +1,5 @@
+# Ignore .env files in the repository
+.env
+
+# Ignore launch files
+.x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv
