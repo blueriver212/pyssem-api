@@ -14,19 +14,24 @@ from celery import Celery
 from celery.result import AsyncResult
 import logging
 
-# MongoDB
-from pymongo import MongoClient
-from pymongo.server_api import ServerApi
+# PostgreSQL
+from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from marshmallow import fields, validate
 from dotenv import load_dotenv
 load_dotenv()
 import json
-from bson.json_util import dumps
 
 ## APP SET UP
 app = Flask(__name__)
 app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+
+# Load database configuration from .env file
+app.config['SQLALCHEMY_DATABASE_URI'] = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+    f"@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DATABASE')}"
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Celery set up
 # Configure Celery to use the same logger as Flask
@@ -37,36 +42,30 @@ celery_logger.setLevel(logging.INFO)
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.config['CELERY_BROKER_URL'])
 
-# MongoDB configuration
-uri = os.getenv("MONGO_URI")
-if not uri:
-    raise ValueError("No MONGO_URI set for MongoDB connection")
-
-mongo = MongoClient(uri, server_api=ServerApi('1'), tlsAllowInvalidCertificates=True)
-
-try:
-    mongo.db.command('ping')
-    print("Pinged the simulation database. You are now connected!")
-except Exception as e:
-    print(f"Failed to connect to MongoDB (Simulation Database): {e}")
-
-
-# Marshmellow Set Up for Object Declaration
+# Database set up
+db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
-# Create a simulation schema - which can then be tested against using marshmallow (essentially just creates an object)
-class SimulationSchema(ma.Schema):
-    simulation_name = fields.String(required=True)
-    id = fields.String(required=True)
-    owner = fields.String(required=True)
-    description = fields.String(required=True)
-    created = fields.DateTime(required=True)
-    modified = fields.DateTime(required=True)
-    scenario_properties = fields.Dict(keys=fields.String(), required=True)
-    species = fields.Dict(keys=fields.String(), required=True)
-    status = fields.String(required=True, validate=validate.OneOf(["running", "completed", "failed", "pending"]))
+# Simulation model
+class Simulation(db.Model):
+    __tablename__ = 'simulations'
+    id = db.Column(db.String, primary_key=True)
+    simulation_name = db.Column(db.String, nullable=False)
+    owner = db.Column(db.String, nullable=False)
+    description = db.Column(db.String, nullable=False)
+    created = db.Column(db.DateTime, nullable=False)
+    modified = db.Column(db.DateTime, nullable=False)
+    scenario_properties = db.Column(db.JSON, nullable=False)
+    species = db.Column(db.JSON, nullable=False)
+    status = db.Column(db.String, nullable=False, default='pending')
+
+# Marshmallow schema
+class SimulationSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = Simulation
 
 simulation_schema = SimulationSchema()
+simulations_schema = SimulationSchema(many=True)
 
 ## ROUTES
 @celery.task(bind=True)
@@ -94,10 +93,10 @@ def simulate_task(self, scenario_props, species, id):
     results = model.run_model()
 
     # Update the simulation status in the database
-    mongo.db.simulations.update_one(
-        {"id": id},
-        {"$set": {"status": "completed"}}
-    )
+    simulation = Simulation.query.get(id)
+    simulation.status = 'completed'
+    db.session.commit()
+
     return results
 
 @app.route('/')
@@ -116,7 +115,7 @@ def task_status():
     elif task.state == 'SUCCESS':
         response = {
             'status': 'success',
-            'message': 'Simulation task has comWpleted successfully.'
+            'message': 'Simulation task has completed successfully.'
         }
     elif task.state == 'FAILURE':
         response = {
@@ -146,7 +145,7 @@ def create_simulation():
         app.logger.error(f'Invalid data: {errors}')
         return jsonify({"error": "Invalid data", "messages": errors}), 400
 
-    existing_simulation = mongo.db.simulations.find_one({"id": data.get("id")})
+    existing_simulation = Simulation.query.get(data.get("id"))
     if existing_simulation:
         app.logger.error('Simulation with this ID already exists')
         return jsonify({"error": "A simulation with this ID already exists"}), 409
@@ -154,10 +153,11 @@ def create_simulation():
     # Add to the database
     try:
         data['status'] = 'running'
-        result = mongo.db.simulations.insert_one(data)
+        new_simulation = Simulation(**data)
+        db.session.add(new_simulation)
+        db.session.commit()
         app.logger.info(f'Created simulation with ID: {data.get("id")}')
 
-        # data = json.load(data)
         scenario_props = data["scenario_properties"]
         species = data["species"]
 
@@ -173,10 +173,9 @@ def create_simulation():
 
 # Search for simulations
 def search_simulations(query):
-    simulations = mongo.db.simulations.find(query)
-    simulations_list = list(simulations)  # Convert cursor to list
-    if simulations_list:
-        return jsonify([json.loads(dumps(sim)) for sim in simulations_list]), 200
+    simulations = Simulation.query.filter_by(**query).all()
+    if simulations:
+        return simulations_schema.jsonify(simulations), 200
     return jsonify({"error": "No simulations found"}), 404
 
 @app.route('/simulation/id/<string:simulation_id>', methods=['GET'])
@@ -187,8 +186,9 @@ def get_simulation_by_id(simulation_id):
 # Delete all simulations
 @app.route('/simulation', methods=['DELETE'])
 def delete_all_simulations():
-    result = mongo.db.simulations.delete_many({})
-    return jsonify({"deleted_count": result.deleted_count}), 200
+    num_deleted = db.session.query(Simulation).delete()
+    db.session.commit()
+    return jsonify({"deleted_count": num_deleted}), 200
 
 
 if __name__ == '__main__':

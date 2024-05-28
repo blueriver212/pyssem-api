@@ -1,11 +1,15 @@
 Flask
 Celery
 redis
-pymongo
+flask_sqlalchemy
 python-dotenv
 flask_marshmallow
+matplotlib
 marshmallow
+psycopg2
 pandas
+bs4
+requests
 numpy
 scipy
 setuptools==68.0.0
