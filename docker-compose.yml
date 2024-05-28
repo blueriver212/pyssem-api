@@ -16,9 +16,11 @@ services:
     image: "redis:alpine"
 
   celery:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     depends_on:
       - redis
-    command: ["celery", "-A", "app.celery", "worker", "--loglevel=info"]
+    command: celery -A app.celery_worker.celery worker --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
