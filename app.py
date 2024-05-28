@@ -1,43 +1,37 @@
-# General
-import time
 import os
-
-# pyssem
-from pyssem.model import Model
-
-# Flask
-from flask import Flask, jsonify
-from flask import request, jsonify
-
-# Celery
-from celery import Celery
-from celery.result import AsyncResult
 import logging
-
-# PostgreSQL
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, jsonify, request
 from flask_marshmallow import Marshmallow
-from marshmallow import fields, validate
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
+from celery import Celery
 from dotenv import load_dotenv
+from flask_sqlalchemy import SQLAlchemy
+from pyssem import model
+
 load_dotenv()
-import json
+
+# Load environment variables
+POSTGRES_USER = os.getenv('POSTGRES_USER')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD')
+POSTGRES_HOST = os.getenv('POSTGRES_HOST')
+POSTGRES_DATABASE = os.getenv('POSTGRES_DATABASE')
+
+if not all([POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_DATABASE]):
+    raise ValueError("One or more environment variables are missing. Please check your .env file.")
 
 ## APP SET UP
 app = Flask(__name__)
 app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
-
-# Load database configuration from .env file
 app.config['SQLALCHEMY_DATABASE_URI'] = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DATABASE')}"
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}/{POSTGRES_DATABASE}"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_POOL_SIZE'] = 10
+app.config['SQLALCHEMY_MAX_OVERFLOW'] = 20
+app.config['SQLALCHEMY_POOL_TIMEOUT'] = 30
 
-# Celery set up
 # Configure Celery to use the same logger as Flask
 celery_logger = logging.getLogger('celery')
-
-# Set the logging level for Celery logger
 celery_logger.setLevel(logging.INFO)
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'], backend=app.config['CELERY_BROKER_URL'])
@@ -71,10 +65,11 @@ simulations_schema = SimulationSchema(many=True)
 @celery.task(bind=True)
 def simulate_task(self, scenario_props, species, id):
     celery_logger.info('Starting simulate_task')
-
-    print(scenario_props)
-    # Create an instance of the pySSEM_model with the simulation parameters
-    model = Model(
+    
+    try:
+        print(scenario_props)
+        # Create an instance of the pySSEM_model with the simulation parameters
+        model = Model(
             start_date=scenario_props["start_date"].split("T")[0],  # Assuming the date is in ISO format
             simulation_duration=scenario_props["simulation_duration"],
             steps=scenario_props["steps"],
@@ -89,15 +84,22 @@ def simulate_task(self, scenario_props, species, id):
             launchfile='x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv'
         )
 
-    model.configure_species(species)
-    results = model.run_model()
+        model.configure_species(species)
+        results = model.run_model()
 
-    # Update the simulation status in the database
-    simulation = Simulation.query.get(id)
-    simulation.status = 'completed'
-    db.session.commit()
+        # Update the simulation status in the database
+        simulation = Simulation.query.get(id)
+        simulation.status = 'completed'
+        db.session.commit()
 
-    return results
+        return results
+    except Exception as e:
+        celery_logger.error(f"Simulation task failed: {str(e)}")
+        # Update the simulation status to 'failed'
+        simulation = Simulation.query.get(id)
+        simulation.status = 'failed'
+        db.session.commit()
+        raise e
 
 @app.route('/')
 def hello():
@@ -106,6 +108,9 @@ def hello():
 @app.route('/task_status', methods=['GET'])
 def task_status():
     data = request.get_json()
+    if not data or 'result_id' not in data:
+        return jsonify({"error": "result_id is required"}), 400
+    
     task = simulate_task.AsyncResult(data['result_id'])
     if task.state == 'PENDING':
         response = {
@@ -167,7 +172,7 @@ def create_simulation():
         return jsonify({'result_id': task.id}), 201
     
     except Exception as e:
-        app.logger.error('Failed to create simulation')
+        app.logger.error(f'Failed to create simulation: {str(e)}')
         # return error message
         return jsonify({"error": str(e)}), 500
 

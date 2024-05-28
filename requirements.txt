@@ -1,11 +1,13 @@
-Flask
+Flask>=2.0.0
+Werkzeug>=2.0.0
 Celery
 redis
 flask_sqlalchemy
-python-dotenv
 flask_marshmallow
+marshmallow_sqlalchemy
+python-dotenv
 matplotlib
-marshmallow
+SQLAlchemy
 psycopg2
 pandas
 bs4
