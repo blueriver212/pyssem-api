@@ -1,26 +1,29 @@
 version: '3'
-
 services:
-  flask:
+  web:
     build: .
+    command: flask run --host=0.0.0.0
+    volumes:
+      - .:/app
     ports:
       - "5000:5000"
-    volumes:
-      - .:/app
     depends_on:
+      - rabbitmq
       - redis
-    environment:
-      - FLASK_ENV=development
-
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
   redis:
     image: "redis:alpine"
-
   celery:
     build: .
-    depends_on:
-      - redis
-    command: celery -A app.celery_worker.celery worker --loglevel=info
+    command: celery -A app worker --loglevel=info
     volumes:
       - .:/app
+    depends_on:
+      - rabbitmq
+      - redis
     environment:
-      - FLASK_ENV=development
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//

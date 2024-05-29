@@ -10,12 +10,11 @@ ADD . /app
 # Install any needed packages specified in requirements.txt
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
+RUN pip install -i https://test.pypi.org/simple/ pyssem==0.1.dev172
 
-# Make port 5000 available to the world outside this container
+COPY . .
+
 EXPOSE 5000
-
-# Define environment variable
-ENV NAME World
 
 # Run app.py when the container launches
 CMD ["flask", "run", "--host=0.0.0.0"]

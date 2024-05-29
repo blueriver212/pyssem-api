@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app as app
 from app import db, celery
-from app.models import Simulation
-from app.schemas import simulation_schema, simulations_schema
-from app.tasks import simulate_task
+from ..models import Simulation
+from ..schemas import simulation_schema, simulations_schema
+from ..tasks import simulate_task
 
 simulation_blueprint = Blueprint('simulation', __name__)
 
@@ -48,7 +48,7 @@ def create_simulation():
         app.logger.error('No data provided')
         return jsonify({"error": "No data provided"}), 400
 
-    errors = simulation_schema.validate(data)
+    errors = simulation_schema.validate(data, session=db.session)
     if errors:
         app.logger.error(f'Invalid data: {errors}')
         return jsonify({"error": "Invalid data", "messages": errors}), 400
@@ -92,10 +92,10 @@ def delete_all_simulations():
 @simulation_blueprint.route('/simulation', methods=['GET'])
 def get_all_simulations():
     simulations = Simulation.query.all()
-    return simulations_schema.jsonify(simulations), 200
+    return simulations_schema.dump(simulations), 200
 
 def search_simulations(query):
     simulations = Simulation.query.filter_by(**query).all()
     if simulations:
-        return simulations_schema.jsonify(simulations), 200
+        return simulations_schema.dump(simulations), 200
     return jsonify({"error": "No simulations found"}), 404

@@ -1,6 +1,6 @@
 import logging
 from app import celery, db
-from models import Simulation
+from .models import Simulation
 from pyssem import Model
 
 celery_logger = logging.getLogger('celery')

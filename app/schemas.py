@@ -1,5 +1,5 @@
 from app import ma
-from models import Simulation
+from .models import Simulation
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 
 class SimulationSchema(SQLAlchemyAutoSchema):
