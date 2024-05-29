@@ -170,18 +170,41 @@ def create_simulation():
         app.logger.error('Failed to create simulation')
         # return error message
         return jsonify({"error": str(e)}), 500
+    
+# Run a simulation from a get request
+@app.route('/simulation/run/<string:simulation_id>', methods=['GET'])
+def run_simulation_from_id(simulation_id):
+    simulation = Simulation.query.get(simulation_id)
+    if not simulation:
+        return jsonify({"error": "Simulation not found"}), 404
+    
+    # Check if simulation is already running
+    if simulation.status == 'running':
+        return jsonify({"error": "Simulation is already running"}), 400
+    
+    # Update status to running
+    simulation.status = 'running'
+    db.session.commit()
 
-# Search for simulations
-def search_simulations(query):
-    simulations = Simulation.query.filter_by(**query).all()
-    if simulations:
-        return simulations_schema.jsonify(simulations), 200
-    return jsonify({"error": "No simulations found"}), 404
+    # Run simulation
+    try:
+        task = simulate_task.delay(scenario_props=simulation.scenario_properties, species=simulation.species, id=simulation_id)
+    except Exception as e:
+        simulation.status = 'failed'
+        db.session.commit()
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/simulation/id/<string:simulation_id>', methods=['GET'])
-def get_simulation_by_id(simulation_id):
-    return search_simulations({"id": simulation_id})
 
+# This will return any param that is passed after an id
+@app.route('/simulation/<string:simulation_id>/<string:param>', methods=['GET'])
+def get_simulation_param(simulation_id, param):
+    simulation = Simulation.query.get(simulation_id)
+    if simulation:
+        if hasattr(simulation, param):
+            return jsonify({param: getattr(simulation, param)}), 200
+        else:
+            return jsonify({"error": f"Parameter '{param}' not found"}), 404
+    return jsonify({"error": "Simulation not found"}), 404
 
 # Delete all simulations
 @app.route('/simulation', methods=['DELETE'])

@@ -4,6 +4,7 @@ redis
 flask_sqlalchemy
 python-dotenv
 flask_marshmallow
+marshmallow-sqlalchemy
 matplotlib
 marshmallow
 psycopg2
