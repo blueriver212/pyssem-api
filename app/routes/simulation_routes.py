@@ -79,6 +79,25 @@ def create_simulation():
         # return error message
         return jsonify({"error": str(e)}), 500
 
+# Just for teting purposes run a simulation on a get function
+@simulation_blueprint.route('/simulation/id/<string:simulation_id>/run', methods=['GET'])
+def run_simulation(simulation_id):
+    simulation = Simulation.query.filter_by(id=simulation_id).first()
+    if simulation:
+        scenario_props = simulation.scenario_properties
+        species = simulation.species
+        task = simulate_task.delay(scenario_props=scenario_props, species=species, id=simulation_id)
+        return jsonify({'result_id': task.id}), 200
+    return jsonify({"error": "Simulation not found"}), 404
+
+
+@simulation_blueprint.route('/simulation/id/<string:simulation_id>/status', methods=['GET'])
+def get_simulation_status(simulation_id):
+    simulation = Simulation.query.filter_by(id=simulation_id).first()
+    if simulation:
+        return jsonify({"status": simulation.status}), 200
+    return jsonify({"error": "Simulation not found"}), 404
+
 @simulation_blueprint.route('/simulation/id/<string:simulation_id>', methods=['GET'])
 def get_simulation_by_id(simulation_id):
     return search_simulations({"id": simulation_id})
