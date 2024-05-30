@@ -67,37 +67,38 @@ class SimulationSchema(ma.SQLAlchemyAutoSchema):
 simulation_schema = SimulationSchema()
 simulations_schema = SimulationSchema(many=True)
 
-## ROUTES
-@celery.task(bind=True)
-def simulate_task(self, scenario_props, species, id):
-    celery_logger.info('Starting simulate_task')
+import psycopg2
+from psycopg2.extras import NamedTupleCursor
+from celery import Task
+from celery.utils.log import get_task_logger
 
-    print(scenario_props)
-    # Create an instance of the pySSEM_model with the simulation parameters
-    model = Model(
-            start_date=scenario_props["start_date"].split("T")[0],  # Assuming the date is in ISO format
-            simulation_duration=scenario_props["simulation_duration"],
-            steps=scenario_props["steps"],
-            min_altitude=scenario_props["min_altitude"],
-            max_altitude=scenario_props["max_altitude"],
-            n_shells=scenario_props["n_shells"],
-            launch_function=scenario_props["launch_function"],
-            integrator=scenario_props["integrator"],
-            density_model=scenario_props["density_model"],
-            LC=scenario_props["LC"],
-            v_imp=scenario_props["v_imp"],
-            launchfile='x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv'
+logger = get_task_logger(__name__)
+
+class BaseTask(Task):
+    abstract = True
+    _db = None
+
+    @property
+    def db(self):
+        if self._db is not None:
+            return self._db
+        self._db = psycopg2.connect(
+            host=self.app.conf.POSTGRES_HOST,
+            port=self.app.conf.POSTGRES_PORT,
+            dbname=self.app.conf.POSTGRES_DBNAME,
+            user=self.app.conf.POSTGRES_USER,
+            password=self.app.conf.POSTGRES_PASSWORD,
+            cursor_factory=NamedTupleCursor,
         )
+        return self._db
 
-    model.configure_species(species)
-    results = model.run_model()
+    def after_return(self, status, retval, task_id, args, kwargs, einfo):
+        if self._db is not None:
+            self._db.close()
+            self._db = None
 
-    # Update the simulation status in the database
-    simulation = Simulation.query.get(id)
-    simulation.status = 'completed'
-    db.session.commit()
 
-    return results
+import time
 
 @app.route('/')
 def hello():
@@ -128,6 +129,21 @@ def task_status():
             'message': 'Simulation task is still running.'
         }
     return jsonify(response)
+
+@app.route('/simulation/tasks', methods=['GET'])
+def get_all_simulation_tasks():
+    simulations = Simulation.query.all()
+    if not simulations:
+        return jsonify({"error": "No simulations found"}), 404
+    
+    result = []
+    for sim in simulations:
+        result.append({
+            "id": str(sim.id),
+            "status": sim.status
+        })
+
+    return jsonify(result), 200
 
 
 ## Actual simulations
@@ -171,16 +187,35 @@ def create_simulation():
         # return error message
         return jsonify({"error": str(e)}), 500
     
+
+class SimulationTask(BaseTask):
+    abstract = True
+
+@celery.task(bind=True, base=SimulationTask)
+def simulate_task(self, scenario_props, species, id):
+
+    # Simulate a task running for a few seconds
+    time.sleep(5)  
+    try:
+        with self.db.cursor() as cursor:
+            cursor.execute(
+                "UPDATE simulation SET status = %s WHERE id = %s",
+                ('completed', id)
+            )
+            self.db.commit()
+        
+    except Exception as e:
+        
+        self.db.rollback()
+
+    return True
+    
 # Run a simulation from a get request
-@app.route('/simulation/run/<string:simulation_id>', methods=['GET'])
+@app.route('/simulation/run/<uuid:simulation_id>', methods=['GET'])
 def run_simulation_from_id(simulation_id):
     simulation = Simulation.query.get(simulation_id)
     if not simulation:
         return jsonify({"error": "Simulation not found"}), 404
-    
-    # Check if simulation is already running
-    if simulation.status == 'running':
-        return jsonify({"error": "Simulation is already running"}), 400
     
     # Update status to running
     simulation.status = 'running'
@@ -188,15 +223,33 @@ def run_simulation_from_id(simulation_id):
 
     # Run simulation
     try:
+        print('running simulation')
         task = simulate_task.delay(scenario_props=simulation.scenario_properties, species=simulation.species, id=simulation_id)
+        return jsonify({"message": "Simulation started", "task_id": task.id}), 202
     except Exception as e:
         simulation.status = 'failed'
         db.session.commit()
         return jsonify({"error": str(e)}), 500
 
+    
+# Return all simulations in the database
+@app.route('/simulation', methods=['GET'])
+def get_simulations():
+    all_simulations = Simulation.query.all()
+    result = simulations_schema.dump(all_simulations)
+    return jsonify(result), 200
+
+# Return a specific simulation based off ID
+@app.route('/simulation/<uuid:simulation_id>', methods=['GET'])
+def get_simulation(simulation_id):
+    simulation = Simulation.query.get(simulation_id)
+    if simulation:
+        return simulation_schema.jsonify(simulation), 200
+    return jsonify({"error": "Simulation not found"}), 404
+
 
 # This will return any param that is passed after an id
-@app.route('/simulation/<string:simulation_id>/<string:param>', methods=['GET'])
+@app.route('/simulation/<uuid:simulation_id>/<string:param>', methods=['GET'])
 def get_simulation_param(simulation_id, param):
     simulation = Simulation.query.get(simulation_id)
     if simulation:
