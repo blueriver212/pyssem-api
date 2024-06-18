@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 services:
   flask:
@@ -21,4 +21,12 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - redis
-    command: ["celery", "-A", "app.celery", "worker", "--loglevel=info"]
+    command:
+      [
+        "celery",
+        "-A",
+        "run_model.celery",
+        "worker",
+        "--pool=threads",
+        "--loglevel=info",
+      ]
