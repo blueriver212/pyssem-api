@@ -53,7 +53,7 @@ def run_model(self):
     update_progress(30, "loading species")
     species = simulation_data["species"]
     update_progress(40, "configure species")
-    species_list = model.configure_species(species)
+    model.configure_species(species)
     model.run_model()
     return {'current': 100, 'total': 100, 'status': 'Task completed!',
             'result': "finished!"}
