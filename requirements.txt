@@ -21,3 +21,4 @@ gunicorn
 loky
 imageio
 billiard
+flask-cors

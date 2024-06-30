@@ -1,10 +1,12 @@
 import json
 from flask import Flask, request, render_template, session, flash, redirect, \
     url_for, jsonify
+from flask_cors import CORS
 from celery import Celery
 from pyssem.pyssem.model import Model
 
 app = Flask(__name__)
+CORS(app)
 
 app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
 
@@ -18,11 +20,13 @@ def update_progress(self, current , status):
                             'status': status})
 
 @celery.task(bind=True)
-def run_model(self):
+def run_model(self, arg1, arg2):
     def update_progress(current , status):
         self.update_state(state='PROGRESS',
                             meta={'current':current, 'total': 99,
                                 'status': status})
+        
+    print(arg1, arg2)
     update_progress(1, "starting")
     with open('./three_species.json') as f:
         simulation_data = json.load(f)
@@ -61,7 +65,8 @@ def run_model(self):
 
 @app.route('/runmodel', methods=['POST'])
 def runmodel():
-    task = run_model.apply_async()
+    # task = run_model.apply_async()
+    task = run_model.delay("test1","test2")
     return jsonify({}), 202, {'Location': url_for('taskstatus',
                                                   task_id=task.id)}
 
