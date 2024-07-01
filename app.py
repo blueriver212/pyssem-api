@@ -22,9 +22,16 @@ from dotenv import load_dotenv
 load_dotenv()
 import json
 
+# import cors
+from flask_cors import CORS, cross_origin
+
 ## APP SET UP
 app = Flask(__name__)
-app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+
+#CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})  # Allow only http://localhost:3000
+CORS(app)
+# app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 # Load database configuration from .env file
 app.config['SQLALCHEMY_DATABASE_URI'] = (
@@ -101,6 +108,7 @@ class BaseTask(Task):
 import time
 
 @app.route('/')
+@cross_origin()
 def hello():
     return 'Hello, welcome to the Pyssem API!'
 
@@ -148,6 +156,7 @@ def get_all_simulation_tasks():
 
 ## Actual simulations
 @app.route('/simulation', methods=['POST'])
+@cross_origin()
 def create_simulation():
     app.logger.info('Received request to create simulation')
     data = request.get_json()
@@ -196,17 +205,17 @@ def simulate_task(self, scenario_props, species, id):
 
     # Simulate a task running for a few seconds
     time.sleep(5)  
-    try:
-        with self.db.cursor() as cursor:
-            cursor.execute(
-                "UPDATE simulation SET status = %s WHERE id = %s",
-                ('completed', id)
-            )
-            self.db.commit()
+    # try:
+    #     with self.db.cursor() as cursor:
+    #         cursor.execute(
+    #             "UPDATE simulation SET status = %s WHERE id = %s",
+    #             ('completed', id)
+    #         )
+    #         self.db.commit()
         
-    except Exception as e:
+    # except Exception as e:
         
-        self.db.rollback()
+    #     self.db.rollback()
 
     return True
     

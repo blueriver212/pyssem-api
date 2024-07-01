@@ -10,6 +10,9 @@ COPY requirements.txt requirements.txt
 
 RUN pip install -r requirements.txt
 
+RUN pip install --upgrade pip setuptools && \
+    pip uninstall pyssem && \
+    pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pyssem==0.1.dev215
 WORKDIR /app
 COPY . /app
 COPY ./x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv pyssem/utils/launch/data/x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv
