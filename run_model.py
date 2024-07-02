@@ -77,7 +77,7 @@ def update_progress(self, current , status):
                             'status': status})
 
 @celery.task(bind=True)
-def run_model(self, simulation_data):
+def run_model(self, simulation_data, postgress_url):
     def update_progress(current, status):
         self.update_state(state='PROGRESS',
                           meta={'current': current, 'total': 99,
@@ -106,6 +106,7 @@ def run_model(self, simulation_data):
         density_model=scenario_props["density_model"],
         LC=scenario_props["LC"],
         v_imp=scenario_props["v_imp"],
+        fragment_spreading=False
     )
 
     update_progress(30, "loading species")
@@ -150,9 +151,7 @@ def run_model(self, simulation_data):
         
         conn.close()
 
-    conn = psycopg2.connect(
-        # Add own connection details
-        )
+    conn = psycopg2.connect(POSTGRES_URL)
     try:
         # Insert the data into the table
         insert_data(conn, simulation_data['id'], output)
@@ -221,7 +220,7 @@ def api_create_order():
         # convert to json
         simulation_json = json.dumps(simulation_dict)
         
-        task = run_model.delay(simulation_json)
+        task = run_model.delay(simulation_json, os.getenv('POSTGRES_URL'))
         response = jsonify({
             'task_id': url_for('taskstatus', task_id=task.id, _external=True)
         })
