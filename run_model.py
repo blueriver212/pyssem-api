@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import psycopg2
 from psycopg2.extras import Json
+from cors import _build_cors_preflight_response, _corsify_actual_response
 
 app = Flask(__name__)
 
@@ -30,10 +31,6 @@ app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
 # Initialize extensions
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
-
-# Initialize Celery
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
 
 # Simulation model
 class Simulation(db.Model):
@@ -67,6 +64,10 @@ class SimulationSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Simulation
 
+# Initialize Celery
+celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+celery.conf.update(app.config)
+
 simulation_schema = SimulationSchema()
 simulations_schema = SimulationSchema(many=True)
 
@@ -77,7 +78,7 @@ def update_progress(self, current , status):
                             'status': status})
 
 @celery.task(bind=True)
-def run_model(self, simulation_data, postgress_url):
+def run_model(self, simulation_data, postgres_url):
     def update_progress(current, status):
         self.update_state(state='PROGRESS',
                           meta={'current': current, 'total': 99,
@@ -151,24 +152,20 @@ def run_model(self, simulation_data, postgress_url):
         
         conn.close()
 
-    conn = psycopg2.connect(POSTGRES_URL)
     try:
         # Insert the data into the table
+        conn = psycopg2.connect(postgres_url)
         insert_data(conn, simulation_data['id'], output)
+    except Exception as e:
+        # Cannot connect to the database and return 500 error
+        return {'current': 100, 'total': 100, 'status': 'Task failed!',
+            'result': str(e), 'output': output}
     finally:
         # Close the connection
         conn.close()
 
     return {'current': 100, 'total': 100, 'status': 'Task completed!',
             'result': "finished!", 'output': output}
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    if request.method == 'GET':
-        return render_template('index.html')
-
-    return redirect(url_for('index'))
-
 
 @app.route('/status/<task_id>')
 def taskstatus(task_id):
@@ -199,7 +196,7 @@ def taskstatus(task_id):
     return jsonify(response)
 
 
-@app.route("/api/orders", methods=["POST", "OPTIONS"])
+@app.route("/runmodel", methods=["POST", "OPTIONS"])
 def api_create_order():
     if request.method == "OPTIONS":  # CORS preflight
         return _build_cors_preflight_response()
@@ -207,8 +204,6 @@ def api_create_order():
 
         # Get the simulation id
         simulation_id = request.json["id"]
-
-        
 
         # Connect to the database and return the simulation data
         simulation_data = Simulation.query.get(simulation_id)
@@ -221,6 +216,7 @@ def api_create_order():
         simulation_json = json.dumps(simulation_dict)
         
         task = run_model.delay(simulation_json, os.getenv('POSTGRES_URL'))
+
         response = jsonify({
             'task_id': url_for('taskstatus', task_id=task.id, _external=True)
         })
@@ -229,16 +225,13 @@ def api_create_order():
     else:
         raise RuntimeError("Weird - don't know how to handle method {}".format(request.method))
 
-def _build_cors_preflight_response():
-    response = make_response()
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    response.headers.add('Access-Control-Allow-Headers', "*")
-    response.headers.add('Access-Control-Allow-Methods', "*")
-    return response
 
-def _corsify_actual_response(response):
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    return response
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'GET':
+        return render_template('index.html')
 
-if __name__ == '__main__':\
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
     app.run(debug=True)
