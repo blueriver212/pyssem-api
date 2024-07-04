@@ -14,6 +14,7 @@ load_dotenv()
 import psycopg2
 from psycopg2.extras import Json
 from cors import _build_cors_preflight_response, _corsify_actual_response
+import uuid
 
 app = Flask(__name__)
 
@@ -119,37 +120,63 @@ def run_model(self, simulation_data, postgres_url):
     model.run_model()
 
     output = model.results_to_json()
-
     # convert to json
     output = json.loads(output)
 
     # connect to the postgres database
     def insert_data(conn, simulation_id, results_data):
-        insert_query = '''
-        INSERT INTO results (id, times, n_shells, species, Hmid, max_altitude, min_altitude, population_data)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (id) DO UPDATE SET
+        # Generate a new UUID for the new entry if it doesn't exist
+        new_id = str(uuid.uuid4())
+        
+        # Query to check if an entry with the same simulation_id exists
+        check_query = '''
+        SELECT id FROM results WHERE simulation_id = %s
+        '''
+        
+        # Insert or update query
+        insert_update_query = '''
+        INSERT INTO results (id, times, n_shells, species, Hmid, max_altitude, min_altitude, population_data, launch, simulation_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (simulation_id) DO UPDATE SET
             times = EXCLUDED.times,
             n_shells = EXCLUDED.n_shells,
             species = EXCLUDED.species,
             Hmid = EXCLUDED.Hmid,
             max_altitude = EXCLUDED.max_altitude,
             min_altitude = EXCLUDED.min_altitude,
-            population_data = EXCLUDED.population_data;
+            population_data = EXCLUDED.population_data,
+            launch = EXCLUDED.launch
         '''
+        
+        # Update query for simulations table
         update_query = '''
         UPDATE simulations SET status = %s WHERE id = %s
         '''
-        with conn.cursor() as cursor:
-            cursor.execute(insert_query, (
-                simulation_id, results_data['times'], results_data['n_shells'],
-                results_data['species'], results_data['Hmid'], results_data['max_altitude'],
-                results_data['min_altitude'], Json(results_data['population_data'])
-            ))
-            cursor.execute(update_query, ('completed', simulation_id))
-            conn.commit()
-        print('Inserted/Updated results data and updated simulation status')
         
+        with conn.cursor() as cursor:
+            # Check if an entry with the same simulation_id exists
+            cursor.execute(check_query, (simulation_id,))
+            existing_entry = cursor.fetchone()
+            
+            if existing_entry:
+                entry_id = existing_entry[0]
+            else:
+                entry_id = new_id
+            
+            # Insert or update the results data
+            cursor.execute(insert_update_query, (
+                entry_id, results_data['times'], results_data['n_shells'],
+                results_data['species'], results_data['Hmid'], results_data['max_altitude'],
+                results_data['min_altitude'], Json(results_data['population_data']),
+                Json(results_data['launch']), simulation_id
+            ))
+            
+            # Update the simulations table
+            cursor.execute(update_query, ('completed', simulation_id))
+            
+            conn.commit()
+        
+        print('Inserted/Updated results data and updated simulation status')
         conn.close()
 
     try:
