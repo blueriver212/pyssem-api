@@ -186,13 +186,13 @@ def run_model(self, simulation_data, postgres_url):
     except Exception as e:
         # Cannot connect to the database and return 500 error
         return {'current': 100, 'total': 100, 'status': 'Task failed!',
-            'result': str(e), 'output': output}
+            'result': str(e)}
     finally:
         # Close the connection
         conn.close()
 
     return {'current': 100, 'total': 100, 'status': 'Task completed!',
-            'result': "finished!", 'output': output}
+            'result': "finished!"}
 
 @app.route('/status/<task_id>')
 def taskstatus(task_id):
