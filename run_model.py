@@ -24,6 +24,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DATABASE')}"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
 
 # Celery configuration
 app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
