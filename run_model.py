@@ -194,7 +194,7 @@ def run_model(self, simulation_data, postgres_url):
     return {'current': 100, 'total': 100, 'status': 'Task completed!',
             'result': "finished!"}
 
-@app.route('/status/<task_id>')
+@app.route('/status/<task_id>',methods=["POST", "OPTIONS"])
 def taskstatus(task_id):
     if request.method == "OPTIONS":  # CORS preflight
         print("CORS preflight request for task status")
