@@ -225,7 +225,8 @@ def taskstatus(task_id):
                 'total': 1,
                 'status': str(task.info),
             }
-        return jsonify(response)
+        response = jsonify(response)
+        return _corsify_actual_response(response)
 
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
