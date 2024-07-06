@@ -197,8 +197,10 @@ def run_model(self, simulation_data, postgres_url):
 @app.route('/status/<task_id>')
 def taskstatus(task_id):
     if request.method == "OPTIONS":  # CORS preflight
+        print("CORS preflight request for task status")
         return _build_cors_preflight_response()
     elif request.method == "GET":  # The actual request following the preflight
+        print(f"Rrequest for task status:{task_id}")
         task = run_model.AsyncResult(task_id)
         if task.state == 'PENDING':
             response = {
