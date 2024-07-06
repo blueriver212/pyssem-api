@@ -200,7 +200,7 @@ def taskstatus(task_id):
         print("CORS preflight request for task status")
         return _build_cors_preflight_response()
     elif request.method == "GET":  # The actual request following the preflight
-        print(f"Rrequest for task status:{task_id}")
+        print(f"Request for task status:{task_id}")
         task = run_model.AsyncResult(task_id)
         if task.state == 'PENDING':
             response = {
