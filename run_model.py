@@ -18,7 +18,6 @@ import uuid
 
 app = Flask(__name__)
 
-# Load database configuration from environment variables
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
     f"@{os.getenv('POSTGRES_HOST')}/{os.getenv('POSTGRES_DATABASE')}"
@@ -33,11 +32,9 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 app.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
 app.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/0'
 
-# Initialize extensions
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
-# Simulation model
 class Simulation(db.Model):
     __tablename__ = 'simulations'
     id = db.Column(db.String, primary_key=True)
@@ -64,12 +61,10 @@ class Simulation(db.Model):
             "status": self.status
         }
 
-# Marshmallow schema
 class SimulationSchema(ma.SQLAlchemyAutoSchema):
     class Meta:
         model = Simulation
 
-# Initialize Celery
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
 
@@ -121,15 +116,13 @@ def run_model(self, simulation_data, postgres_url):
     
     update_progress(40, "configure species")
     model.configure_species(species)
+    update_progress(50, "run model")
     model.run_model()
-
+    update_progress(60, "save results to db")
     output = model.results_to_json()
-    # convert to json
     output = json.loads(output)
 
-    # connect to the postgres database
     def insert_data(conn, simulation_id, results_data):
-        # Generate a new UUID for the new entry if it doesn't exist
         new_id = str(uuid.uuid4())
         
         # Query to check if an entry with the same simulation_id exists
@@ -137,7 +130,6 @@ def run_model(self, simulation_data, postgres_url):
         SELECT id FROM results WHERE simulation_id = %s
         '''
         
-        # Insert or update query
         insert_update_query = '''
         INSERT INTO results (id, times, n_shells, species, Hmid, max_altitude, min_altitude, population_data, launch, simulation_id)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -152,7 +144,6 @@ def run_model(self, simulation_data, postgres_url):
             launch = EXCLUDED.launch
         '''
         
-        # Update query for simulations table
         update_query = '''
         UPDATE simulations SET status = %s WHERE id = %s
         '''
@@ -167,7 +158,6 @@ def run_model(self, simulation_data, postgres_url):
             else:
                 entry_id = new_id
             
-            # Insert or update the results data
             cursor.execute(insert_update_query, (
                 entry_id, results_data['times'], results_data['n_shells'],
                 results_data['species'], results_data['Hmid'], results_data['max_altitude'],
@@ -175,7 +165,6 @@ def run_model(self, simulation_data, postgres_url):
                 Json(results_data['launch']), simulation_id
             ))
             
-            # Update the simulations table
             cursor.execute(update_query, ('completed', simulation_id))
             
             conn.commit()
@@ -184,15 +173,12 @@ def run_model(self, simulation_data, postgres_url):
         conn.close()
 
     try:
-        # Insert the data into the table
         conn = psycopg2.connect(postgres_url)
         insert_data(conn, simulation_data['id'], output)
     except Exception as e:
-        # Cannot connect to the database and return 500 error
         return {'current': 100, 'total': 100, 'status': 'Task failed!',
             'result': str(e)}
     finally:
-        # Close the connection
         conn.close()
 
     return {'current': 100, 'total': 100, 'status': 'Task completed!',
@@ -200,10 +186,9 @@ def run_model(self, simulation_data, postgres_url):
 
 @app.route('/status/<task_id>',methods=["GET", "OPTIONS"])
 def taskstatus(task_id):
-    if request.method == "OPTIONS":  # CORS preflight
-        print("CORS preflight request for task status")
+    if request.method == "OPTIONS":
         return _build_cors_preflight_response()
-    elif request.method == "GET":  # The actual request following the preflight
+    elif request.method == "GET":
         print(f"Request for task status:{task_id}")
         task = run_model.AsyncResult(task_id)
         if task.state == 'PENDING':
@@ -235,21 +220,18 @@ def taskstatus(task_id):
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
 def api_create_order():
-    if request.method == "OPTIONS":  # CORS preflight
+    if request.method == "OPTIONS":
         return _build_cors_preflight_response()
-    elif request.method == "POST":  # The actual request following the preflight
+    elif request.method == "POST":
 
-        # Get the simulation id
         simulation_id = request.json["id"]
 
-        # Connect to the database and return the simulation data
         simulation_data = Simulation.query.get(simulation_id)
         if simulation_data is None:
             print(simulation_id)
             return jsonify({"error": "Simulation not found"}), 404
         
         simulation_dict = simulation_data.to_dict()
-        # convert to json
         simulation_json = json.dumps(simulation_dict)
         
         task = run_model.delay(simulation_json, os.getenv('POSTGRES_URL'))
