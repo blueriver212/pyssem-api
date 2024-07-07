@@ -81,7 +81,7 @@ def update_progress(self, current , status):
 def run_model(self, simulation_data, postgres_url):
     def update_progress(current, status):
         self.update_state(state='PROGRESS',
-                          meta={'current': current, 'total': 99,
+                          meta={'current': current, 'total': 100,
                                 'status': status})
     update_progress(1, "starting")
 
