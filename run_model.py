@@ -15,8 +15,10 @@ import psycopg2
 from psycopg2.extras import Json
 from cors import _build_cors_preflight_response, _corsify_actual_response
 import uuid
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
@@ -186,36 +188,33 @@ def run_model(self, simulation_data, postgres_url):
 
 @app.route('/status/<task_id>',methods=["GET", "OPTIONS"])
 def taskstatus(task_id):
-    if request.method == "OPTIONS":
-        return _build_cors_preflight_response()
-    elif request.method == "GET":
-        print(f"Request for task status:{task_id}")
-        task = run_model.AsyncResult(task_id)
-        if task.state == 'PENDING':
-            response = {
-                'state': task.state,
-                'current': 0,
-                'total': 1,
-                'status': 'Pending...'
-            }
-        elif task.state != 'FAILURE':
-            response = {
-                'state': task.state,
-                'current': task.info.get('current', 0),
-                'total': task.info.get('total', 1),
-                'status': task.info.get('status', '')
-            }
-            if 'result' in task.info:
-                response['result'] = task.info['result']
-        else:
-            response = {
-                'state': task.state,
-                'current': 1,
-                'total': 1,
-                'status': str(task.info),
-            }
-        response = jsonify(response)
-        return _corsify_actual_response(response)
+    print(f"Request for task status:{task_id}")
+    task = run_model.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'current': 0,
+            'total': 1,
+            'status': 'Pending...'
+        }
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'current': task.info.get('current', 0),
+            'total': task.info.get('total', 1),
+            'status': task.info.get('status', '')
+        }
+        if 'result' in task.info:
+            response['result'] = task.info['result']
+    else:
+        response = {
+            'state': task.state,
+            'current': 1,
+            'total': 1,
+            'status': str(task.info),
+        }
+    response = jsonify(response)
+    return response
     
 @app.route('/health', methods=['GET'])
 def health():
@@ -224,29 +223,24 @@ def health():
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
 def api_create_order():
-    if request.method == "OPTIONS":
-        return _build_cors_preflight_response()
-    elif request.method == "POST":
 
-        simulation_id = request.json["id"]
+    simulation_id = request.json["id"]
 
-        simulation_data = Simulation.query.get(simulation_id)
-        if simulation_data is None:
-            print(simulation_id)
-            return jsonify({"error": "Simulation not found"}), 404
-        
-        simulation_dict = simulation_data.to_dict()
-        simulation_json = json.dumps(simulation_dict)
-        
-        task = run_model.delay(simulation_json, os.getenv('POSTGRES_URL'))
+    simulation_data = Simulation.query.get(simulation_id)
+    if simulation_data is None:
+        print(simulation_id)
+        return jsonify({"error": "Simulation not found"}), 404
+    
+    simulation_dict = simulation_data.to_dict()
+    simulation_json = json.dumps(simulation_dict)
+    
+    task = run_model.delay(simulation_json, os.getenv('POSTGRES_URL'))
 
-        response = jsonify({
-            'task_id': url_for('taskstatus', task_id=task.id, _external=True)
-        })
-        response.status_code = 202
-        return _corsify_actual_response(response)
-    else:
-        raise RuntimeError("Weird - don't know how to handle method {}".format(request.method))
+    response = jsonify({
+        'task_id': url_for('taskstatus', task_id=task.id, _external=True)
+    })
+    response.status_code = 202
+    return (response)
 
 
 @app.route('/', methods=['GET', 'POST'])
