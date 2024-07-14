@@ -216,7 +216,10 @@ def taskstatus(task_id):
             }
         response = jsonify(response)
         return _corsify_actual_response(response)
-
+    
+@app.route('/health', methods=['GET'])
+def health():
+    return 'OK', 200
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
 def api_create_order():
