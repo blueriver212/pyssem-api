@@ -219,6 +219,7 @@ def taskstatus(task_id):
     
 @app.route('/health', methods=['GET'])
 def health():
+    print("health check") 
     return 'OK', 200
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
