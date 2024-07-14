@@ -217,7 +217,7 @@ def taskstatus(task_id):
         response = jsonify(response)
         return _corsify_actual_response(response)
     
-@app.route('/health2', methods=['GET'])
+@app.route('/health', methods=['GET'])
 def health():
     print("health check") 
     return 'OK', 200
