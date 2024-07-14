@@ -20,4 +20,4 @@ COPY ./x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellation
 RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
 USER appuser
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run_model:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers","5","--threads","2","run_model:app"]
