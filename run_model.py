@@ -221,7 +221,7 @@ def taskstatus(task_id):
 def health():
     if request.method == "OPTIONS":
         return _build_cors_preflight_response()
-    elif request.method == "POST":
+    elif request.method == "GET":
         return 'OK', 200
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
