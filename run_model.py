@@ -217,10 +217,12 @@ def taskstatus(task_id):
         response = jsonify(response)
         return _corsify_actual_response(response)
     
-@app.route('/health', methods=['GET'])
+@app.route('/health', methods=["GET", "OPTIONS"])
 def health():
-    print("health check") 
-    return 'OK', 200
+    if request.method == "OPTIONS":
+        return _build_cors_preflight_response()
+    elif request.method == "POST":
+        return 'OK', 200
 
 @app.route("/runmodel", methods=["POST", "OPTIONS"])
 def api_create_order():
