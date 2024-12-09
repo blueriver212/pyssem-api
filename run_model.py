@@ -232,16 +232,7 @@ def api_create_order():
 
         simulation_id = request.json["id"]
 
-<<<<<<< HEAD
-        # Connect to the database and return the simulation data
-        try:
-            simulation_data = Simulation.query.get(simulation_id)    
-        except Exception:
-            simulation_data = Simulation.query.get(simulation_id)
-        
-=======
         simulation_data = Simulation.query.get(simulation_id)
->>>>>>> 1938128beeaf577e220b7376d2985561d5848378
         if simulation_data is None:
             print(simulation_id)
             return jsonify({"error": "Simulation not found"}), 404
