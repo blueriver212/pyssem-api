@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 version: '3'
+=======
+# version: "3"
+
+>>>>>>> 12baa754107f0dc468fdfbd2393bb3eb40a1ecd6
 services:
   web:
     build: .
@@ -26,4 +31,27 @@ services:
       - rabbitmq
       - redis
     environment:
+<<<<<<< HEAD
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+=======
+      - FLASK_ENV=development
+
+  redis:
+    image: "redis:alpine"
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - redis
+    command:
+      [
+        "celery",
+        "-A",
+        "run_model.celery",
+        "worker",
+        "--pool=threads",
+        "--loglevel=info",
+      ]
+>>>>>>> 12baa754107f0dc468fdfbd2393bb3eb40a1ecd6

@@ -1,0 +1,78 @@
+<html>
+  <head>
+    <title>Simulation</title>
+    <style>
+        .progress {
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+  </head>
+  <body>
+    <h1>Simulation</h1>
+    <button id="start-bg-job">Run Simulation 1</button><br><br>
+    <div id="progress"></div>
+    <hr>
+    <button id="start-bg-job2">Run Simulation 2</button><br><br>
+    <div id="progress2"></div>
+    <hr>        
+    <button id="start-bg-job3">Run Simulation 3</button><br><br>
+    <div id="progress3"></div>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/nanobar/0.2.1/nanobar.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script>
+        function run_model() {
+            div = $('<div class="progress"><div></div><div>0%</div><div>...</div><div>&nbsp;</div></div><hr>');
+            $('#progress').append(div);
+
+            var nanobar = new Nanobar({
+                bg: '#44f',
+                target: div[0].childNodes[0]
+            });
+
+            $.ajax({
+                type: 'POST',
+                url: '/runmodel',
+                success: function(data, status, request) {
+                    status_url = request.getResponseHeader('Location');
+                    update_progress(status_url, nanobar, div[0]);
+                },
+                error: function() {
+                    alert('Unexpected error');
+                }
+            });
+        }
+        function update_progress(status_url, nanobar, status_div) {
+            $.getJSON(status_url, function(data) {
+                percent = parseInt(data['current'] * 100 / data['total']);
+                nanobar.go(percent);
+                $(status_div.childNodes[1]).text(percent + '%');
+                $(status_div.childNodes[2]).text(data['status']);
+                if (data['state'] != 'PENDING' && data['state'] != 'PROGRESS') {
+                    if ('result' in data) {
+                        $(status_div.childNodes[3]).text('Result: ' + data['result']);
+                    }
+                    else {
+                        $(status_div.childNodes[3]).text('Result: ' + data['state']);
+                    }
+                }
+                else {
+                    setTimeout(function() {
+                        update_progress(status_url, nanobar, status_div);
+                    }, 2000);
+                }
+            });
+        }
+        $(function() {
+            $('#start-bg-job').click(run_model);
+        });
+        $(function() {
+            $('#start-bg-job2').click(run_model);
+        });
+        $(function() {
+            $('#start-bg-job3').click(run_model);
+        });
+    </script>
+  </body>
+</html>

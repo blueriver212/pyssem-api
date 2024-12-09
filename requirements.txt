@@ -4,16 +4,31 @@ Celery
 redis
 flask_sqlalchemy
 flask_marshmallow
+<<<<<<< HEAD
 marshmallow_sqlalchemy
 python-dotenv
 matplotlib
 SQLAlchemy
 psycopg2
 pandas
+=======
+marshmallow-sqlalchemy
+matplotlib
+marshmallow
+psycopg2-binary
+>>>>>>> 12baa754107f0dc468fdfbd2393bb3eb40a1ecd6
 bs4
 requests
-numpy
-scipy
-setuptools==68.0.0
-tqdm
-sympy
+setuptools>=68.0.0 
+numpy>=1.2
+pandas==2.0
+scipy==1.10
+sympy==1.11
+tqdm==4.65
+gdown==4.0.0
+debugpy
+gunicorn
+loky
+imageio
+billiard
+flask-cors

@@ -1,20 +1,23 @@
-# Use an official Python runtime as a parent image
 FROM python:3.9
-
-# Set the working directory in the container
-WORKDIR /app
-
-# Copy the current directory contents into the container at /app
-ADD . /app
-
-# Install any needed packages specified in requirements.txt
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-RUN pip install -i https://test.pypi.org/simple/ pyssem==0.1.dev172
-
-COPY . .
 
 EXPOSE 5000
 
-# Run app.py when the container launches
-CMD ["flask", "run", "--host=0.0.0.0"]
+ENV PYTHONDONTWRITEBYTECODE=1
+
+ENV PYTHONUNBUFFERED=1
+
+COPY requirements.txt requirements.txt
+
+RUN pip install -r requirements.txt
+
+RUN pip install --upgrade pip setuptools && \
+    pip uninstall pyssem && \
+    pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ pyssem==0.1.dev219
+WORKDIR /app
+COPY . /app
+COPY ./x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv pyssem/utils/launch/data/x0_launch_repeatlaunch_2018to2022_megaconstellationLaunches_Constellations.csv
+
+RUN adduser -u 5678 --disabled-password --gecos "" appuser && chown -R appuser /app
+USER appuser
+
+CMD ["gunicorn", "--bind", "0.0.0.0:5000","--workers","5","--threads","2","run_model:app"]
